@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>슬라임 라인 소리 고르기</title>
+<meta name="description" content="지금 게임 소리와 녹음·악기 샘플 후보를 나란히 들어 보고 고르는 페이지">
+<link rel="icon" href="data:,">
+<!--
+  청취 페이지(담당 S, 기획서 「콘텐츠 보강 명세 > 효과음 품질 개선 > 고르는 방법」).
+  게임 코드와 따로 도는 한 파일이다. 개발 서버에서는 /listen.html, 배포에서는 게임 주소 뒤에 listen.html.
+  "지금 소리"는 게임의 합성 방법(src/game/audio.ts)을 그대로 옮겨 WebAudio로 다시 만들고, 후보는 assets/audio/candidates/의 파일을 낸다.
+  크기는 게임과 같게 맞췄다(설정 크기 70 기준). 아래 sound-data의 synth 값은 audio.ts와, candidates는 src/game/audio/candidates.ts와
+  같아야 한다(tests/sfxCandidates.test.ts가 본다). 후보 목록은 candidates.ts를 고친 뒤 스크립트로 다시 넣는다.
+-->
+<style>
+@font-face { font-family: 'Jua'; src: url('fonts/Jua-Regular.woff2') format('woff2'); font-display: swap; }
+:root {
+  --bg: #fff8f1; --card: #ffffff; --ink: #3d2a33; --soft: #7a6470; --line: #f0dfe4;
+  --accent: #ff7fa8; --accent-ink: #ffffff; --pick: #2fae7a; --pick-bg: #e6f7ef; --btn: #ffe9f0; --btn-ink: #7a2d4b; --now: #fff4d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1a1d; --card: #2a2428; --ink: #f6eaf0; --soft: #bfa9b5; --line: #3d3339;
+    --accent: #ff8fb4; --accent-ink: #2a1520; --pick: #5fd3a2; --pick-bg: #1d3a2e; --btn: #3a2a31; --btn-ink: #ffd6e5; --now: #3a3322;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1a1d; --card: #2a2428; --ink: #f6eaf0; --soft: #bfa9b5; --line: #3d3339;
+  --accent: #ff8fb4; --accent-ink: #2a1520; --pick: #5fd3a2; --pick-bg: #1d3a2e; --btn: #3a2a31; --btn-ink: #ffd6e5; --now: #3a3322;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif; }
+main { max-width: 880px; margin: 0 auto; padding: 20px 16px 120px; }
+h1, h2 { font-family: 'Jua', -apple-system, 'Apple SD Gothic Neo', sans-serif; font-weight: 400; margin: 0; }
+h1 { font-size: 30px; }
+h2 { font-size: 23px; }
+.lead { color: var(--soft); margin: 6px 0 14px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin: 14px 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+.controls label { display: flex; align-items: center; gap: 8px; }
+input[type=range] { width: 160px; }
+input[type=checkbox] { width: 22px; height: 22px; }
+.slot { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin: 18px 0; }
+.slot header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 10px; }
+.slot .where { color: var(--soft); font-size: 14px; }
+.slot .chosen { margin-left: auto; font-size: 14px; color: var(--pick); font-weight: 700; }
+.opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.opt { border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.opt.now { background: var(--now); }
+.opt.picked { border-color: var(--pick); background: var(--pick-bg); }
+.opt .name { font-weight: 700; }
+.opt .from { color: var(--soft); font-size: 13px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; border: 0; border-radius: 12px; min-height: 52px; padding: 10px 16px; cursor: pointer; touch-action: manipulation; }
+button.play { background: var(--btn); color: var(--btn-ink); font-weight: 700; flex: 1 1 auto; }
+button.play.on { background: var(--accent); color: var(--accent-ink); }
+button.pick { background: transparent; border: 2px solid var(--pick); color: var(--pick); font-weight: 700; }
+.opt.picked button.pick { background: var(--pick); color: var(--card); }
+#result { white-space: pre-wrap; word-break: break-all; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; padding: 12px; font: 14px/1.5 ui-monospace, Menlo, monospace; margin: 10px 0; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+.bar .in { max-width: 880px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+.bar .count { flex: 1; color: var(--soft); font-size: 14px; }
+button.main { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+button.quiet { background: var(--btn); color: var(--btn-ink); }
+.note { font-size: 14px; color: var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <h1>슬라임 라인 소리 고르기</h1>
+  <p class="lead">소리 묶음마다 <b>지금 소리</b>와 후보를 번갈아 눌러 들어 보고, 마음에 드는 것에 <b>이걸로</b>를 눌러 주세요. 폰 스피커와 이어폰 둘 다로 들어 보면 좋아요. 다 고르면 맨 아래 <b>결과 복사</b>를 눌러 보내 주세요. 크기는 게임과 같게 맞춰 두었어요.</p>
+
+  <section class="panel controls" aria-label="듣기 설정">
+    <label>소리 크기 <input id="vol" type="range" min="0" max="100" value="70"> <span id="volv">70</span></label>
+    <label><input id="verb" type="checkbox" checked> 지금 소리에 공간 울림(게임에 새로 켠 것)</label>
+    <button class="quiet" id="stop" type="button">■ 모두 멈춤</button>
+  </section>
+
+  <div id="slots"></div>
+
+  <section class="panel" aria-label="결과">
+    <h2>고른 결과</h2>
+    <p class="note">이 글을 그대로 보내 주면 게임의 소리 고르기 표(src/game/audio/choices.ts)에 옮겨 넣어요. “current”는 지금 소리를 그대로 두는 것이에요.</p>
+    <div id="result"></div>
+    <div class="row"><button class="main" id="copy" type="button">결과 복사</button><button class="quiet" id="reset" type="button">모두 지금 소리로</button></div>
+  </section>
+</main>
+<div class="bar"><div class="in"><span class="count" id="count"></span><button class="main" id="copy2" type="button">결과 복사</button></div></div>
+
+<script type="application/json" id="sound-data">{"synth":{"NOTE_FREQ":[523.25,587.33,659.25,783.99,880,1046.5,1174.66],"PENTA":[523.25,587.33,659.25,783.99,880],"INSTRUMENTS":{"bell":{"partials":[[1,1,1.5],[3.93,0.28,0.14],[2.76,0.12,0.5]],"length":1.6,"octave":1,"wave":"sine"},"drop":{"partials":[[1,1,0.35],[2,0.18,0.1]],"length":0.45,"octave":1,"wave":"sine","bend":1.25},"chime":{"partials":[[1,0.8,2.2],[2.76,0.35,1.2],[5.4,0.12,0.6]],"length":2.4,"octave":2,"wave":"sine"},"ice":{"partials":[[1,0.9,1.1],[4,0.25,0.25],[6.8,0.1,0.15]],"length":1.2,"octave":2,"wave":"triangle"},"frog":{"partials":[[1,1,0.22],[2,0.3,0.12]],"length":0.3,"octave":0.25,"wave":"triangle","bend":0.8},"owl":{"partials":[[1,1,0.6],[2,0.12,0.3]],"length":0.7,"octave":0.25,"wave":"sine","vibrato":5}},"SYNTH_GAIN":0.42,"FILE_GAIN":1,"AMBIENCE_GAIN":0.1,"CONTROL_BASE":0.16,"SAMPLE_MAX":2.4,"REVERB":{"length":1.1,"decay":0.32,"predelay":0.012,"wet":0.16},"SFX_HOME_FILE":"sfx-home.mp3","SFX_HOME_VOLUME":0.42},"slots":[{"slot":"amb-rain","label":"비","where":"월드 2 놀이, 그림 이야기","kind":"loop"},{"slot":"amb-wind","label":"바람","where":"월드 3 놀이, 그림 이야기","kind":"loop"},{"slot":"amb-snow","label":"눈(겨울 공기)","where":"월드 4 놀이, 그림 이야기","kind":"loop"},{"slot":"note-bell","label":"소리 꽃(종)","where":"소리 꽃, 마을 물 주기, 판 시작·끝 음, 내 멜로디","kind":"note"},{"slot":"note-drop","label":"빗방울 실로폰","where":"월드 2 빗방울","kind":"note"},{"slot":"note-chime","label":"풍경","where":"월드 3 바람개비, 월드 지도","kind":"note"},{"slot":"note-ice","label":"고드름 실로폰","where":"월드 4 고드름","kind":"note"},{"slot":"note-frog","label":"개구리","where":"월드 2 개구리","kind":"note"},{"slot":"note-owl","label":"부엉이","where":"월드 3 부엉이","kind":"note"},{"slot":"control","label":"조작 소리","where":"선 긋기 음계, 슬라임이 선에 올라설 때","kind":"note"},{"slot":"pop","label":"등장 “뽁”","where":"슬라임 등장(놀이·마을·대문·옷장·그림 이야기)","kind":"note"},{"slot":"home","label":"집 도착 “딩”","where":"슬라임이 집에 들어갈 때","kind":"oneshot"}],"candidates":[{"id":"rain-gopro","slot":"amb-rain","file":"rain-gopro.mp3","label":"비 1: 가까운 빗소리","gain":0.399,"from":"OpenGameArt · Kresiek The Furry 「AMB Rain Loop 2」","sources":["oga-amb-rain-loop-2"]},{"id":"rain-window","slot":"amb-rain","file":"rain-window.mp3","label":"비 2: 창가의 부드러운 비","gain":0.373,"from":"OpenGameArt · Ylmir 「Rain (loopable)」 3번","sources":["oga-rain-loopable-3"]},{"id":"rain-shower","slot":"amb-rain","file":"rain-shower.mp3","label":"비 3: 소나기","gain":0.317,"from":"위키미디어 공용 · ezwa 「Rain (1).ogg」","sources":["commons-rain-1"]},{"id":"wind-field","slot":"amb-wind","file":"wind-field.mp3","label":"바람 1: 들판 바람(녹음)","gain":0.145,"from":"OpenGameArt · Thimras 「Park ambiences」 wind","sources":["oga-park-ambience-wind"]},{"id":"wind-pd","slot":"amb-wind","file":"wind-pd.mp3","label":"바람 2: 부드러운 바람(만든 소리)","gain":0.112,"from":"OpenGameArt · Luke.RUSTLTD 「wind1」","sources":["oga-wind1"]},{"id":"snow-field-soft","slot":"amb-snow","file":"snow-field-soft.mp3","label":"눈 1: 먼 바람(녹음을 낮고 조용하게)","gain":0.132,"from":"OpenGameArt · Thimras 「Park ambiences」 wind","sources":["oga-park-ambience-wind"]},{"id":"snow-pd-soft","slot":"amb-snow","file":"snow-pd-soft.mp3","label":"눈 2: 아주 낮은 바람(만든 소리)","gain":0.127,"from":"OpenGameArt · Luke.RUSTLTD 「wind1」","sources":["oga-wind1"]},{"id":"bell-glock","slot":"note-bell","file":"bell-glock.mp3","label":"글로켄슈필","gain":0.434,"root":1578.8,"octave":2,"from":"VSCO 2 CE · 글로켄슈필 G5","sources":["vsco-glock-g5"]},{"id":"bell-glock-low","slot":"note-bell","file":"bell-glock-low.mp3","label":"글로켄슈필(한 옥타브 낮게)","gain":0.405,"root":1053.6,"octave":1,"from":"VSCO 2 CE · 글로켄슈필 C5","sources":["vsco-glock-c5"]},{"id":"bell-harp","slot":"note-bell","file":"bell-harp.mp3","label":"하프(뮤직박스 느낌)","gain":0.397,"root":781.6,"octave":1,"from":"VSCO 2 CE · 하프 G5","sources":["vsco-harp-g5"]},{"id":"drop-marimba","slot":"note-drop","file":"drop-marimba.mp3","label":"마림바","gain":0.226,"root":782.9,"octave":1,"from":"VSCO 2 CE · 마림바 G4","sources":["vsco-marimba-g4"]},{"id":"drop-marimba-high","slot":"note-drop","file":"drop-marimba-high.mp3","label":"마림바(높게, 톡톡)","gain":0.213,"root":2093.6,"octave":2,"from":"VSCO 2 CE · 마림바 C6","sources":["vsco-marimba-c6"]},{"id":"chime-glock-high","slot":"note-chime","file":"chime-glock-high.mp3","label":"높은 글로켄슈필","gain":0.376,"root":2111.8,"octave":2,"from":"VSCO 2 CE · 글로켄슈필 C6","sources":["vsco-glock-c6"]},{"id":"chime-bell","slot":"note-chime","file":"chime-bell.mp3","label":"작은 종","gain":0.427,"root":1057.5,"octave":2,"from":"OpenGameArt · PWL 「Bell dings/chimes」 2","sources":["oga-bell-ding-2"]},{"id":"ice-xylo","slot":"note-ice","file":"ice-xylo.mp3","label":"실로폰","gain":0.278,"root":1582.7,"octave":2,"from":"VSCO 2 CE · 실로폰 G5","sources":["vsco-xylo-g5"]},{"id":"ice-glock-top","slot":"note-ice","file":"ice-glock-top.mp3","label":"아주 높은 글로켄슈필","gain":0.292,"root":3164.5,"octave":4,"from":"VSCO 2 CE · 글로켄슈필 G6","sources":["vsco-glock-g6"]},{"id":"frog-marimba-low","slot":"note-frog","file":"frog-marimba-low.mp3","label":"낮은 마림바(통)","gain":0.142,"root":524.5,"octave":0.5,"from":"VSCO 2 CE · 마림바 C4","sources":["vsco-marimba-c4"]},{"id":"frog-slitdrum","slot":"note-frog","file":"frog-slitdrum.mp3","label":"나무 북(톡)","gain":0.162,"root":294.7,"octave":0.5,"from":"VSCO 2 CE · 슬릿 드럼","sources":["vsco-slitdrum-1"]},{"id":"frog-real","slot":"note-frog","file":"frog-real.mp3","label":"진짜 개구리 울음","gain":0.151,"root":783.99,"octave":1,"from":"OpenGameArt · EZduzziteh 「Ribbit Frog Sounds」 1","sources":["oga-ribbit-1"]},{"id":"owl-flute","slot":"note-owl","file":"owl-flute.mp3","label":"낮은 플루트(후우)","gain":0.31,"root":523.2,"octave":0.5,"from":"VSCO 2 CE · 플루트 C4","sources":["vsco-flute-c4"]},{"id":"owl-clarinet","slot":"note-owl","file":"owl-clarinet.mp3","label":"클라리넷(짧게)","gain":0.301,"root":585.9,"octave":0.5,"from":"VSCO 2 CE · 클라리넷 D4","sources":["vsco-clarinet-d4"]},{"id":"control-glock","slot":"control","file":"bell-glock.mp3","label":"글로켄슈필","gain":0.18,"root":1578.8,"octave":2,"from":"VSCO 2 CE · 글로켄슈필 G5","sources":["vsco-glock-g5"]},{"id":"control-harp","slot":"control","file":"bell-harp.mp3","label":"하프","gain":0.153,"root":781.6,"octave":1,"from":"VSCO 2 CE · 하프 G5","sources":["vsco-harp-g5"]},{"id":"pop-bubble","slot":"pop","file":"pop-bubble.mp3","label":"물방울 거품","gain":0.457,"root":391.995,"octave":1,"from":"OpenGameArt · rubberduck 「40 CC0 water / splash / slime SFX」 bubble_02","sources":["oga-rubberduck-bubble-02"]},{"id":"pop-pop4","slot":"pop","file":"pop-pop4.mp3","label":"짧은 뽁","gain":0.466,"root":391.995,"octave":1,"from":"OpenGameArt · cogitollc 「Pop sounds」 pop4","sources":["oga-cogitollc-pop4"]},{"id":"pop-3pops","slot":"pop","file":"pop-3pops.mp3","label":"둥근 뽁","gain":0.472,"root":391.995,"octave":1,"from":"OpenGameArt · wubitog 「3 Pop Sounds」 pop1","sources":["oga-wubitog-pop1"]},{"id":"home-glock-chord","slot":"home","file":"home-glock-chord.mp3","label":"글로켄슈필 화음","gain":0.44,"from":"VSCO 2 CE · 글로켄슈필 G5로 만든 도·미·솔·도","sources":["vsco-glock-g5"]},{"id":"home-harp-chord","slot":"home","file":"home-harp-chord.mp3","label":"하프 화음","gain":0.421,"from":"VSCO 2 CE · 하프 G5로 만든 도·미·솔·도","sources":["vsco-harp-g5"]},{"id":"home-bell","slot":"home","file":"home-bell.mp3","label":"작은 종","gain":0.44,"from":"OpenGameArt · PWL 「Bell dings/chimes」 2","sources":["oga-bell-ding-2"]},{"id":"home-kenney","slot":"home","file":"home-kenney.mp3","label":"밝은 알림 화음","gain":0.438,"from":"Kenney 「Interface Sounds」 confirmation_004","sources":["kenney-confirmation-004"]}]}</script>
+<script>
+'use strict';
+const DATA = JSON.parse(document.getElementById('sound-data').textContent);
+const S = DATA.synth;
+const DIR = 'assets/audio/';
+const CAND_DIR = DIR + 'candidates/';
+const CURRENT = 'current';
+const STORE = 'slime-listen-picks-v1';
+
+// ─── 소리 판(게임 audio.ts와 같은 연결) ─────────────────────────────
+// 합성음 → synthOut(SYNTH_GAIN) → (마른 소리 + 공간 울림) → 스피커, 파일 소리 → fileOut(FILE_GAIN) → 스피커.
+let live = null;
+const buffers = new Map();
+
+function makeImpulse(ctx, o) {
+  const rate = ctx.sampleRate;
+  const len = Math.max(2, Math.round(rate * o.length));
+  const pre = Math.min(len - 1, Math.round(rate * o.predelay));
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let energy = 0;
+    for (let i = pre; i < len; i++) {
+      const t = (i - pre) / rate;
+      const v = (Math.random() * 2 - 1) * Math.exp(-t / o.decay) * Math.min(1, t / 0.005) * Math.min(1, (len - i) / (rate * 0.05));
+      d[i] = v;
+      energy += v * v;
+    }
+    const k = energy > 0 ? 1 / Math.sqrt(energy) : 0;
+    for (let i = 0; i < len; i++) d[i] *= k;
+  }
+  return buf;
+}
+
+function makeBoard(ctx, dest, opts) {
+  const vol = opts.volume;
+  const synthOut = ctx.createGain();
+  synthOut.gain.value = S.SYNTH_GAIN * vol;
+  synthOut.connect(dest);
+  const fileOut = ctx.createGain();
+  fileOut.gain.value = S.FILE_GAIN * vol;
+  fileOut.connect(dest);
+  const ambOut = ctx.createGain();
+  ambOut.gain.value = vol;
+  ambOut.connect(dest);
+  const wet = ctx.createGain();
+  wet.gain.value = opts.reverb ? S.REVERB.wet : 0;
+  if (typeof ctx.createConvolver === 'function') {
+    const conv = ctx.createConvolver();
+    conv.normalize = false;
+    conv.buffer = makeImpulse(ctx, S.REVERB);
+    synthOut.connect(conv);
+    conv.connect(wet);
+    wet.connect(dest);
+  }
+  let noise = null;
+  return {
+    ctx, synthOut, fileOut, ambOut, wet,
+    noise() {
+      if (!noise) {
+        const len = Math.round(ctx.sampleRate * 2);
+        noise = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = noise.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      }
+      return noise;
+    },
+  };
+}
+
+function volumeNow() { return Number(document.getElementById('vol').value) / 70; }
+
+function board() {
+  if (!live) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    live = makeBoard(ctx, ctx.destination, { volume: volumeNow(), reverb: document.getElementById('verb').checked });
+  }
+  if (live.ctx.state === 'suspended') live.ctx.resume();
+  return live;
+}
+
+async function loadBuffer(ctx, file) {
+  if (buffers.has(file)) return buffers.get(file);
+  const res = await fetch(file);
+  if (!res.ok || (res.headers.get('content-type') || '').includes('text/html')) throw new Error(file + ' 파일이 없다(' + res.status + ')');
+  const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+  buffers.set(file, buf);
+  return buf;
+}
+
+// ─── 지금 소리: audio.ts의 합성 방법을 그대로 ────────────────────────
+function synthNote(b, t, n, instrument, pan) {
+  const ctx = b.ctx;
+  const ins = S.INSTRUMENTS[instrument] || S.INSTRUMENTS.bell;
+  const k = Math.max(0, Math.min(S.NOTE_FREQ.length - 1, Math.round(n)));
+  const f = S.NOTE_FREQ[k] * ins.octave;
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(0.32, t + 0.006);
+  out.gain.exponentialRampToValueAtTime(0.0008, t + ins.length - 0.1);
+  let last = out;
+  if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; out.connect(p); last = p; }
+  last.connect(b.synthOut);
+  for (const [ratio, gain, decay] of ins.partials) {
+    const osc = ctx.createOscillator();
+    osc.type = ins.wave;
+    osc.frequency.setValueAtTime(f * ratio, t);
+    if (ins.bend) osc.frequency.exponentialRampToValueAtTime(f * ratio * ins.bend, t + Math.min(0.12, decay));
+    if (ins.vibrato) {
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = ins.vibrato;
+      const depth = ctx.createGain();
+      depth.gain.value = f * ratio * 0.02;
+      lfo.connect(depth);
+      depth.connect(osc.frequency);
+      lfo.start(t);
+      lfo.stop(t + ins.length);
+    }
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0005, t + decay);
+    osc.connect(g);
+    g.connect(out);
+    osc.start(t);
+    osc.stop(t + ins.length);
+  }
+}
+
+function synthPop(b, t, i) {
+  const ctx = b.ctx;
+  const N = S.NOTE_FREQ.length;
+  const f = S.NOTE_FREQ[((i % N) + N) % N] / 2;
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(0.5, t + 0.008);
+  out.gain.exponentialRampToValueAtTime(0.0005, t + 0.22);
+  out.connect(b.synthOut);
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(f * 0.8, t);
+  osc.frequency.exponentialRampToValueAtTime(f * 1.25, t + 0.07);
+  osc.connect(out);
+  osc.start(t);
+  osc.stop(t + 0.25);
+}
+
+function softTone(b, t, freq, o) {
+  const ctx = b.ctx;
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(o.gain, t + 0.01);
+  out.gain.exponentialRampToValueAtTime(0.0005, t + o.length);
+  out.connect(b.synthOut);
+  const osc = ctx.createOscillator();
+  osc.type = o.wave;
+  osc.frequency.setValueAtTime(freq, t);
+  osc.connect(out);
+  osc.start(t);
+  osc.stop(t + o.length + 0.02);
+  if (o.overtone > 0) {
+    const g = ctx.createGain();
+    g.gain.value = o.overtone;
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(freq * 2, t);
+    osc2.connect(g);
+    g.connect(out);
+    osc2.start(t);
+    osc2.stop(t + o.length * 0.6);
+  }
+}
+
+// 선 긋기 음(step 0~14)과 선에 올라서기 음(n 0~4, burst 겹친 수)의 높이·크기: audio.ts drawStep·stepOn과 같다
+function drawStepTone(step) {
+  const s = Math.max(0, Math.min(14, step));
+  return { f: S.PENTA[s % 5] * Math.pow(2, Math.floor(s / 5)) * 0.5, o: { gain: 0.16, length: 0.32, wave: 'sine', overtone: 0.12 } };
+}
+function stepOnTone(n, burst) {
+  return { f: S.PENTA[((n % 5) + 5) % 5] * 2, o: { gain: 0.08 + burst * 0.015, length: 0.22, wave: 'triangle', overtone: 0 } };
+}
+
+function synthAmbience(b, kind) {
+  const ctx = b.ctx;
+  const src = ctx.createBufferSource();
+  src.buffer = b.noise();
+  src.loop = true;
+  const filter = ctx.createBiquadFilter();
+  const out = ctx.createGain();
+  out.gain.value = 0;
+  const level = S.AMBIENCE_GAIN;
+  let lfo = null;
+  if (kind === 'rain') { filter.type = 'bandpass'; filter.frequency.value = 1400; filter.Q.value = 0.5; }
+  else if (kind === 'wind') {
+    filter.type = 'lowpass'; filter.frequency.value = 420;
+    lfo = ctx.createOscillator(); lfo.frequency.value = 0.12;
+    const depth = ctx.createGain(); depth.gain.value = level * 0.6;
+    lfo.connect(depth); depth.connect(out.gain); lfo.start();
+  } else { filter.type = 'lowpass'; filter.frequency.value = 900; }
+  src.connect(filter); filter.connect(out); out.connect(b.ambOut);
+  out.gain.setTargetAtTime(kind === 'snow' ? level * 0.5 : level, ctx.currentTime, 0.8);
+  src.start();
+  return () => { try { out.gain.setTargetAtTime(0, ctx.currentTime, 0.1); setTimeout(() => { src.stop(); if (lfo) lfo.stop(); out.disconnect(); }, 500); } catch (e) { /* 이미 멈춤 */ } };
+}
+
+// ─── 후보 소리: audio.ts playSample과 같다 ───────────────────────────
+function rateFor(c, freq) {
+  let r = (freq * (c.octave || 1)) / (c.root || freq);
+  if (!isFinite(r) || r <= 0) return 1;
+  while (r < 0.25) r *= 2;
+  while (r > 4) r /= 2;
+  return r;
+}
+
+function playFile(b, t, buf, rate, gain, pan) {
+  const ctx = b.ctx;
+  const full = buf.duration / rate;
+  const length = Math.min(S.SAMPLE_MAX, full);
+  const g0 = Math.max(0.0001, gain);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.setValueAtTime(rate, t);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(g0, t);
+  if (length < full) { g.gain.setValueAtTime(g0, t + length - 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + length); }
+  src.connect(g);
+  let last = g;
+  if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; g.connect(p); last = p; }
+  last.connect(b.fileOut);
+  src.start(t);
+  src.stop(t + length);
+}
+
+function fileAmbience(b, buf, c) {
+  const ctx = b.ctx;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  const out = ctx.createGain();
+  out.gain.value = 0;
+  src.connect(out);
+  out.connect(b.ambOut);
+  out.gain.setTargetAtTime(c.gain, ctx.currentTime, 0.8);
+  src.start(ctx.currentTime, 0);
+  return () => { try { out.gain.setTargetAtTime(0, ctx.currentTime, 0.1); setTimeout(() => { src.stop(); out.disconnect(); }, 500); } catch (e) { /* 이미 멈춤 */ } };
+}
+
+// ─── 들려주기(묶음 종류마다) ─────────────────────────────────────────
+const INSTRUMENT_OF = { 'note-bell': 'bell', 'note-drop': 'drop', 'note-chime': 'chime', 'note-ice': 'ice', 'note-frog': 'frog', 'note-owl': 'owl' };
+const SCALE = [0, 1, 2, 3, 4, 5, 6];
+const TUNE = [0, 2, 4, 2, 5, 4, 3, 2];
+
+/**
+ * 한 소리 일정을 b(소리 판)에 건다. slot 묶음, c 후보(없으면 지금 소리), what 무엇을 들려줄지, buf 후보 파일 소리, home 지금 집 도착 파일.
+ * 시작 때(초)부터 이어지는 일정이며, 걸린 전체 길이(초)를 돌려준다
+ */
+function schedule(b, slot, c, what, buf, home, t0) {
+  const ctx = b.ctx;
+  const t = t0 == null ? ctx.currentTime + 0.05 : t0;
+  const note = (at, n, pan) => {
+    if (c) playFile(b, at, buf, rateFor(c, S.NOTE_FREQ[n]), c.gain, pan);
+    else synthNote(b, at, n, INSTRUMENT_OF[slot], pan);
+  };
+  if (INSTRUMENT_OF[slot]) {
+    if (what === 'one') { note(t, 2, 0); return 1.6; }
+    if (what === 'tune') { TUNE.forEach((n, i) => note(t + i * 0.3, n, 0)); return TUNE.length * 0.3 + 1.2; }
+    if (what === 'chord') { [0, 2, 4].forEach((n, i) => note(t + i * 0.04, n, (i - 1) * 0.3)); return 1.6; }
+    SCALE.forEach((n, i) => note(t + i * 0.26, n, 0));
+    return SCALE.length * 0.26 + 1.2;
+  }
+  if (slot === 'control') {
+    const tone = (at, x) => {
+      if (c) playFile(b, at, buf, rateFor(c, x.f), (c.gain * x.o.gain) / S.CONTROL_BASE, 0);
+      else softTone(b, at, x.f, x.o);
+    };
+    if (what === 'one') { tone(t, drawStepTone(what === 'one' ? 2 : 0)); return 0.6; }
+    for (let s = 0; s < 12; s++) tone(t + s * 0.1, drawStepTone(s));
+    [0, 2, 4].forEach((n, i) => tone(t + 1.5 + i * 0.35, stepOnTone(n, 0)));
+    return 3.0;
+  }
+  if (slot === 'pop') {
+    const pop = (at, i) => {
+      if (c) playFile(b, at, buf, rateFor(c, S.NOTE_FREQ[((i % 7) + 7) % 7] / 2), c.gain, 0);
+      else synthPop(b, at, i);
+    };
+    if (what === 'one') { pop(t, 3); return 0.5; }
+    for (let i = 0; i < 10; i++) pop(t + i * 0.13, i);
+    return 1.8;
+  }
+  if (slot === 'home') {
+    const ding = (at, cents) => {
+      if (c) playFile(b, at, buf, Math.pow(2, cents / 1200), c.gain, 0);
+      else playFile(b, at, home, Math.pow(2, cents / 1200), S.SFX_HOME_VOLUME, 0);
+    };
+    if (what === 'one') { ding(t, 0); return 1.5; }
+    for (let i = 0; i < 3; i++) ding(t + i * 0.7, (Math.random() * 2 - 1) * (c ? 60 : 140));
+    return 3.0;
+  }
+  return 0;
+}
+
+// ─── 화면 ───────────────────────────────────────────────────────────
+let picks = {};
+try { picks = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { picks = {}; }
+for (const s of DATA.slots) if (!picks[s.slot] || (picks[s.slot] !== CURRENT && !DATA.candidates.some((c) => c.slot === s.slot && c.id === picks[s.slot]))) picks[s.slot] = CURRENT;
+
+let loopStop = null;
+let loopBtn = null;
+
+function stopLoop() {
+  if (loopStop) loopStop();
+  loopStop = null;
+  if (loopBtn) { loopBtn.classList.remove('on'); loopBtn.textContent = '▶ 반복 듣기'; }
+  loopBtn = null;
+}
+
+async function onPlay(btn, slotInfo, c, what) {
+  const b = board();
+  try {
+    if (slotInfo.kind === 'loop') {
+      if (loopBtn === btn) { stopLoop(); return; }
+      stopLoop();
+      const kind = slotInfo.slot.slice(4);
+      loopStop = c ? fileAmbience(b, await loadBuffer(b.ctx, CAND_DIR + c.file), c) : synthAmbience(b, kind);
+      loopBtn = btn;
+      btn.classList.add('on');
+      btn.textContent = '■ 멈춤';
+      return;
+    }
+    const buf = c ? await loadBuffer(b.ctx, CAND_DIR + c.file) : null;
+    const home = !c && slotInfo.slot === 'home' ? await loadBuffer(b.ctx, DIR + S.SFX_HOME_FILE) : null;
+    btn.classList.add('on');
+    const len = schedule(b, slotInfo.slot, c, what, buf, home);
+    setTimeout(() => btn.classList.remove('on'), Math.min(len, 2.5) * 1000);
+  } catch (e) {
+    btn.textContent = '소리를 못 읽었어요';
+    console.error(e);
+  }
+}
+
+function playButtons(slotInfo) {
+  if (slotInfo.kind === 'loop') return [['loop', '▶ 반복 듣기']];
+  if (slotInfo.slot === 'control') return [['run', '▶ 선 긋기']];
+  if (slotInfo.slot === 'pop') return [['run', '▶ 뽁 열 번'], ['one', '한 번']];
+  if (slotInfo.slot === 'home') return [['run', '▶ 세 마리 도착'], ['one', '한 번']];
+  return [['scale', '▶ 음계'], ['tune', '멜로디'], ['chord', '화음']];
+}
+
+function render() {
+  const root = document.getElementById('slots');
+  root.textContent = '';
+  let order = 0;
+  for (const s of DATA.slots) {
+    order++;
+    const sec = document.createElement('section');
+    sec.className = 'slot';
+    sec.id = 'slot-' + s.slot;
+    const head = document.createElement('header');
+    const h = document.createElement('h2');
+    h.textContent = order + '. ' + s.label;
+    const where = document.createElement('span');
+    where.className = 'where';
+    where.textContent = s.where;
+    const chosen = document.createElement('span');
+    chosen.className = 'chosen';
+    head.append(h, where, chosen);
+    sec.append(head);
+    const opts = document.createElement('div');
+    opts.className = 'opts';
+    const list = [{ id: CURRENT, label: '지금 소리', from: s.kind === 'loop' ? '흰 잡음 + 필터 합성' : s.slot === 'home' ? '지금 게임 파일(Suno 효과음)' : '코드 합성' }].concat(DATA.candidates.filter((c) => c.slot === s.slot));
+    for (const item of list) {
+      const c = item.id === CURRENT ? null : item;
+      const box = document.createElement('div');
+      box.className = 'opt' + (c ? '' : ' now') + (picks[s.slot] === item.id ? ' picked' : '');
+      box.dataset.id = item.id;
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = item.label;
+      const from = document.createElement('div');
+      from.className = 'from';
+      from.textContent = item.from;
+      const row = document.createElement('div');
+      row.className = 'row';
+      for (const [what, text] of playButtons(s)) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'play';
+        b.textContent = text;
+        b.addEventListener('click', () => onPlay(b, s, c, what));
+        row.append(b);
+      }
+      const pick = document.createElement('button');
+      pick.type = 'button';
+      pick.className = 'pick';
+      pick.textContent = picks[s.slot] === item.id ? '✓ 골랐어요' : '이걸로';
+      pick.addEventListener('click', () => { picks[s.slot] = item.id; save(); render(); });
+      row.append(pick);
+      box.append(name, from, row);
+      opts.append(box);
+    }
+    chosen.textContent = '고름: ' + (list.find((x) => x.id === picks[s.slot]) || list[0]).label;
+    sec.append(opts);
+    root.append(sec);
+  }
+  showResult();
+}
+
+function resultText() {
+  const out = {};
+  for (const s of DATA.slots) out[s.slot] = picks[s.slot] || CURRENT;
+  return JSON.stringify(out, null, 2);
+}
+
+function showResult() {
+  document.getElementById('result').textContent = resultText();
+  const changed = DATA.slots.filter((s) => picks[s.slot] && picks[s.slot] !== CURRENT).length;
+  document.getElementById('count').textContent = DATA.slots.length + '묶음 가운데 ' + changed + '개를 새 소리로 골랐어요';
+}
+
+function save() {
+  try { localStorage.setItem(STORE, JSON.stringify(picks)); } catch (e) { /* 저장 못 해도 화면에는 남는다 */ }
+}
+
+async function copyResult(btn) {
+  const text = '슬라임 라인 소리 고르기 결과\n' + resultText();
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    ta.remove();
+  }
+  const old = btn.textContent;
+  btn.textContent = ok ? '복사했어요' : '복사가 안 돼요. 위 글을 길게 눌러 복사해 주세요';
+  setTimeout(() => { btn.textContent = old; }, 2000);
+}
+
+document.getElementById('copy').addEventListener('click', (e) => copyResult(e.currentTarget));
+document.getElementById('copy2').addEventListener('click', (e) => copyResult(e.currentTarget));
+document.getElementById('reset').addEventListener('click', () => { for (const s of DATA.slots) picks[s.slot] = CURRENT; save(); render(); });
+document.getElementById('stop').addEventListener('click', () => { stopLoop(); if (live) { live.ctx.close(); live = null; } });
+document.getElementById('vol').addEventListener('input', (e) => {
+  document.getElementById('volv').textContent = e.target.value;
+  if (live) { const v = volumeNow(); live.synthOut.gain.value = S.SYNTH_GAIN * v; live.fileOut.gain.value = S.FILE_GAIN * v; live.ambOut.gain.value = v; }
+});
+document.getElementById('verb').addEventListener('change', (e) => { if (live) live.wet.gain.value = e.target.checked ? S.REVERB.wet : 0; });
+render();
+
+// ─── 크기 재기(작업자용): 지금 소리와 후보를 소리 없이 그려 크기를 잰다 ─────────
+// 150Hz 아래를 깎고(폰 스피커), 한 번 소리는 50ms 창 최대 RMS, 환경음은 5~15초의 긴 RMS(dBFS). 음은 음계 일곱 음의 평균
+window.__measure = async function (slot, id) {
+  const s = DATA.slots.find((x) => x.slot === slot);
+  const c = id === CURRENT ? null : DATA.candidates.find((x) => x.slot === slot && x.id === id);
+  const SR = 44100;
+  const render = async (seconds, fn) => {
+    const ctx = new OfflineAudioContext(2, Math.round(SR * seconds), SR);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 150;
+    hp.connect(ctx.destination);
+    const b = makeBoard(ctx, hp, { volume: 1, reverb: true });
+    await fn(b, ctx);
+    const out = await ctx.startRendering();
+    const L = out.getChannelData(0), R = out.getChannelData(1);
+    const m = new Float64Array(L.length);
+    for (let i = 0; i < L.length; i++) m[i] = (L[i] + R[i]) / 2;
+    return m;
+  };
+  const dB = (v) => 20 * Math.log10(Math.max(v, 1e-9));
+  const maxRms50 = (m) => {
+    const w = Math.round(0.05 * SR);
+    let acc = 0, best = 0;
+    for (let i = 0; i < m.length; i++) {
+      acc += m[i] * m[i];
+      if (i >= w) acc -= m[i - w] * m[i - w];
+      if (i >= w - 1) best = Math.max(best, acc / w);
+    }
+    return dB(Math.sqrt(best));
+  };
+  const load = async (ctx, file) => loadBuffer(ctx, file);
+  if (s.kind === 'loop') {
+    const m = await render(15, async (b, ctx) => {
+      if (c) fileAmbience(b, await load(ctx, CAND_DIR + c.file), c);
+      else synthAmbience(b, slot.slice(4));
+    });
+    let acc = 0;
+    for (let i = 5 * SR; i < m.length; i++) acc += m[i] * m[i];
+    return dB(Math.sqrt(acc / (m.length - 5 * SR)));
+  }
+  const steps = slot === 'home' ? [0] : slot === 'control' ? [0, 2, 4, 6, 8, 10] : SCALE;
+  const vals = [];
+  for (const k of steps) {
+    const m = await render(2.8, async (b, ctx) => {
+      const buf = c ? await load(ctx, CAND_DIR + c.file) : null;
+      const home = !c && slot === 'home' ? await load(ctx, DIR + S.SFX_HOME_FILE) : null;
+      const t = 0.05;
+      if (INSTRUMENT_OF[slot]) { if (c) playFile(b, t, buf, rateFor(c, S.NOTE_FREQ[k]), c.gain, 0); else synthNote(b, t, k, INSTRUMENT_OF[slot], 0); }
+      else if (slot === 'control') { const x = drawStepTone(k); if (c) playFile(b, t, buf, rateFor(c, x.f), (c.gain * x.o.gain) / S.CONTROL_BASE, 0); else softTone(b, t, x.f, x.o); }
+      else if (slot === 'pop') { if (c) playFile(b, t, buf, rateFor(c, S.NOTE_FREQ[k] / 2), c.gain, 0); else synthPop(b, t, k); }
+      else if (slot === 'home') { if (c) playFile(b, t, buf, 1, c.gain, 0); else playFile(b, t, home, 1, S.SFX_HOME_VOLUME, 0); }
+    });
+    vals.push(maxRms50(m));
+  }
+  return vals.reduce((a, v) => a + v, 0) / vals.length;
+};
+</script>
+</body>
+</html>
