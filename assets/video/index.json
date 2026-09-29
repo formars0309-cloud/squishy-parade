@@ -1,0 +1,34 @@
+{
+ "w1-intro": {
+  "720": "story-w1-intro-720.mp4",
+  "seconds": 10
+ },
+ "w1-outro": {
+  "720": "story-w1-outro-720.mp4",
+  "seconds": 10
+ },
+ "w2-intro": {
+  "720": "story-w2-intro-720.mp4",
+  "seconds": 10
+ },
+ "w2-outro": {
+  "720": "story-w2-outro-720.mp4",
+  "seconds": 10
+ },
+ "w3-intro": {
+  "720": "story-w3-intro-720.mp4",
+  "seconds": 10
+ },
+ "w3-outro": {
+  "720": "story-w3-outro-720.mp4",
+  "seconds": 10
+ },
+ "w4-intro": {
+  "720": "story-w4-intro-720.mp4",
+  "seconds": 10
+ },
+ "w4-outro": {
+  "720": "story-w4-outro-720.mp4",
+  "seconds": 20
+ }
+}
