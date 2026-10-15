@@ -7,10 +7,50 @@
     <meta name="theme-color" content="#c9c2f2" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="icons/slime-192.png" />
+    <script id="domain-lock">(function(){try{if(!(function domainAllowed(here, code) {
+	const rules = JSON.parse(String.fromCharCode(...code.map((c, i) => c ^ i * 7 + 90 & 255)));
+	const clean = (host) => host.toLowerCase().replace(/\.$/, "");
+	const fits = (pattern, host, path) => {
+		const cut = pattern.indexOf("/");
+		const name = cut < 0 ? pattern : pattern.slice(0, cut);
+		const dir = cut < 0 ? "" : pattern.slice(cut);
+		return (name.startsWith("*.") ? host === name.slice(2) || host.endsWith(name.slice(1)) : host === name) && (!dir || path === dir || path.startsWith(dir + "/"));
+	};
+	const host = clean(here.hostname);
+	if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return true;
+	if (here.protocol !== "https:" && here.protocol !== "http:") return false;
+	if (!rules.hosts.some((pattern) => fits(pattern, host, here.pathname))) return false;
+	if (!here.framed) return !rules.framed;
+	const outer = here.ancestors ?? (here.referrer ? [here.referrer] : []);
+	if (!outer.length) return false;
+	return outer.every((origin) => {
+		try {
+			const outerHost = clean(new URL(origin).hostname);
+			return rules.parents.some((pattern) => fits(pattern, outerHost, ""));
+		} catch {
+			return false;
+		}
+	});
+})((function hereNow() {
+	let framed = true;
+	try {
+		framed = window.self !== window.top;
+	} catch {}
+	const list = location.ancestorOrigins;
+	return {
+		protocol: location.protocol,
+		hostname: location.hostname,
+		pathname: location.pathname,
+		framed,
+		ancestors: list ? Array.from(list) : null,
+		referrer: document.referrer
+	};
+})(),[33,67,0,0,5,9,247,169,168,194,130,212,194,220,209,166,166,184,182,186,200,138,134,154,97,108,123,126,112,66,77,94,95,50,102,44,57,48,70,71,80,31,239,245,227,244,238,208,154,130,136,134,235,174,184,180,151,141,222,144,151,113,100,102,120,15,65,64,25,78,53,62,59,42,8,30,67,5,29,241,235,245,253,189,251,129,150,203,163,187,181,185,170,150,206,201,161,35,34,33,113,111,69,72,87,82,41,41,41,52,49,6,25,95,27,16,235,175,201,183,128,207,194,214,211,160,168,241,224,135,137,131,133,152,121])){window.__slimeLocked=true;document.documentElement.classList.add('domain-locked')}}catch(e){}})()</script>
     <script>
       // 카카오톡 안 브라우저는 주소창·아래 줄을 숨길 수 없어 기본 브라우저로 옮긴다. 여기서는 표시만 하고, 옮기기와 버튼은 안내 화면을
       // 그린 뒤 body 끝에서 한다. 남은 창은 src/game/webShell.ts의 kakaoGate()가 게임 시작을 막는다(기획서 「웹 전체 화면과 카카오톡 링크」)
       (function () {
+        if (window.__slimeLocked) return;
         if (!/KAKAOTALK/i.test(navigator.userAgent)) return;
         if (/[?&]kakao=stay(&|$)/.test(location.search)) return;
         try { if (sessionStorage.getItem('slime-kakao-stay') === '1') return; } catch (e) {}
@@ -21,9 +61,9 @@
     <link rel="icon" href="data:," />
     <link rel="preload" href="fonts/Jua-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="fonts/SingleDay-title.woff2" as="font" type="font/woff2" crossorigin />
-    <style>@font-face{font-family:Jua;src:url(fonts/Jua-Regular.woff2)format("woff2");font-display:block}@font-face{font-family:SingleDayTitle;src:url(fonts/SingleDay-title.woff2)format("woff2");font-display:block}html,body{background:#c9c2f2;height:100%;margin:0;padding:0;overflow:hidden}#game{inset:var(--safe-area-inset-top,env(safe-area-inset-top,0px)) var(--safe-area-inset-right,env(safe-area-inset-right,0px)) var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)) var(--safe-area-inset-left,env(safe-area-inset-left,0px));position:fixed}.story-video video{object-fit:contain}@media (aspect-ratio>=16/9) and (aspect-ratio<=12/5){.story-video video{object-fit:cover}}#game canvas{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}body{overscroll-behavior:none;touch-action:none}#rotate-hint{display:none}@media (width<=700px) and (orientation:portrait){#rotate-hint{z-index:10;box-sizing:border-box;color:#fff8ea;text-align:center;background:#b9aef3;justify-content:center;align-items:center;padding:28px;font:24px/1.5 Jua,sans-serif;display:flex;position:fixed;inset:0}}#kakao-hint,.kakao-out #rotate-hint{display:none}.kakao-out #kakao-hint{z-index:20;box-sizing:border-box;color:#fff8ea;text-align:center;background:#b9aef3;flex-direction:column;justify-content:center;align-items:center;gap:28px;padding:28px;font:24px/1.5 Jua,sans-serif;display:flex;position:fixed;inset:0}#kakao-hint p{margin:0}#kakao-hint div{flex-wrap:wrap;justify-content:center;gap:14px;display:flex}#kakao-hint button{color:#7a5a8a;background:#fff8ea;border:0;border-radius:18px;padding:12px 22px;font:20px Jua,sans-serif;box-shadow:0 4px #8f80d6}#kakao-hint #kakao-stay{color:#fff8ea;background:0 0;box-shadow:inset 0 0 0 2px #fff8ea}</style>
-    <script type="module" crossorigin src="./assets/index-5Gg5SE9_.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/quality-B8G3ezkn.js">
+    <style>@font-face{font-family:Jua;src:url(fonts/Jua-Regular.woff2)format("woff2");font-display:block}@font-face{font-family:SingleDayTitle;src:url(fonts/SingleDay-title.woff2)format("woff2");font-display:block}html,body{background:#c9c2f2;height:100%;margin:0;padding:0;overflow:hidden}#game{inset:var(--safe-area-inset-top,env(safe-area-inset-top,0px)) var(--safe-area-inset-right,env(safe-area-inset-right,0px)) var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)) var(--safe-area-inset-left,env(safe-area-inset-left,0px));position:fixed}.story-video video{object-fit:contain}@media (aspect-ratio>=16/9) and (aspect-ratio<=12/5){.story-video video{object-fit:cover}}#game canvas{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}body{overscroll-behavior:none;touch-action:none}#rotate-hint{display:none}@media (width<=700px) and (orientation:portrait){#rotate-hint{z-index:10;box-sizing:border-box;color:#fff8ea;text-align:center;background:#b9aef3;justify-content:center;align-items:center;padding:28px;font:24px/1.5 Jua,sans-serif;display:flex;position:fixed;inset:0}}#kakao-hint,.kakao-out #rotate-hint{display:none}.kakao-out #kakao-hint{z-index:20;box-sizing:border-box;color:#fff8ea;text-align:center;background:#b9aef3;flex-direction:column;justify-content:center;align-items:center;gap:28px;padding:28px;font:24px/1.5 Jua,sans-serif;display:flex;position:fixed;inset:0}#kakao-hint p{margin:0}#kakao-hint div{flex-wrap:wrap;justify-content:center;gap:14px;display:flex}#kakao-hint button{color:#7a5a8a;background:#fff8ea;border:0;border-radius:18px;padding:12px 22px;font:20px Jua,sans-serif;box-shadow:0 4px #8f80d6}#kakao-hint #kakao-stay{color:#fff8ea;background:0 0;box-shadow:inset 0 0 0 2px #fff8ea}#lock-hint{display:none}.domain-locked #game,.domain-locked #rotate-hint,.domain-locked #kakao-hint{display:none!important}.domain-locked #lock-hint{z-index:30;box-sizing:border-box;color:#fff8ea;text-align:center;background:#b9aef3;flex-direction:column;justify-content:center;align-items:center;gap:24px;padding:28px;font:24px/1.5 Jua,sans-serif;display:flex;position:fixed;inset:0}#lock-hint img{border-radius:24px;box-shadow:0 6px #8f80d6}#lock-hint p{margin:0}#lock-hint a{color:#7a5a8a;background:#fff8ea;border-radius:18px;padding:12px 22px;font:20px Jua,sans-serif;text-decoration:none;box-shadow:0 4px #8f80d6}</style>
+    <script type="module" crossorigin src="./assets/index-QhaNRQi1.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/quality-DWiI9lFc.js">
     <link rel="modulepreload" crossorigin href="./assets/dist-CD5Q11Pt.js">
     <link rel="stylesheet" crossorigin href="./assets/index-CY3pBzyE.css">
   </head>
@@ -32,6 +72,11 @@
     <div id="kakao-hint">
       <p id="kakao-hint-text">기본 브라우저에서 열었어요<br />그쪽에서 화면 가득 놀 수 있어요</p>
       <div><button id="kakao-reopen" type="button">브라우저로 다시 열기</button><button id="kakao-stay" type="button">카카오톡에서 계속하기</button></div>
+    </div>
+    <div id="lock-hint">
+      <img src="icons/slime-192.png" alt="" width="96" height="96" loading="lazy" />
+      <p id="lock-hint-text">슬라임 라인은<br />공식 사이트에서 놀 수 있어요</p>
+      <a id="lock-open" href="https://slimeline.gracekingames.com/" target="_blank" rel="noopener">공식 사이트에서 열기</a>
     </div>
     <div id="rotate-hint">휴대폰을 가로로 돌려<br />손으로 길을 그려 주세요</div>
     <script>
